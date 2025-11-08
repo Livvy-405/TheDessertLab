@@ -16,10 +16,29 @@ const authRoutes = require('./routes/auth');
 
 // Middleware
 app.use(helmet());
+
+// Improved CORS configuration for both production and development
+const allowedOrigins = [
+  process.env.FRONTEND_URL, // Firebase production URL
+  'http://localhost:3000',
+  'http://localhost:8080',
+  'http://localhost:5173' // Vite default port
+].filter(Boolean); // Remove undefined values
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || ['http://localhost:3000', 'http://localhost:8080'],
+  origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -43,15 +62,15 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/dessert_l
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
-.then(() => console.log('Connected to MongoDB'))
-.catch((error) => console.error('MongoDB connection error:', error));
+.then(() => console.log('✅ Connected to MongoDB'))
+.catch((error) => console.error('❌ MongoDB connection error:', error));
 
-// Email transporter setup - FIXED: Changed EMAIL_PASS to EMAIL_PASSWORD
+// Email transporter setup
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD // Changed from EMAIL_PASS
+    pass: process.env.EMAIL_PASSWORD
   }
 });
 
@@ -72,7 +91,8 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    version: '1.0.0'
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
@@ -114,6 +134,7 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Allowed origins: ${allowedOrigins.join(', ')}`);
 });
 
 module.exports = app;
