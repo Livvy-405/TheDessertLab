@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 require('dotenv').config();
 
 const app = express();
@@ -65,23 +66,35 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/dessert_l
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch((error) => console.error('❌ MongoDB connection error:', error));
 
-// Email transporter setup
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  }
-});
+// Email setup using Resend
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Verify email configuration on startup
-transporter.verify(function(error, success) {
-  if (error) {
-    console.error('❌ Email transporter error:', error);
-  } else {
-    console.log('✅ Email server is ready to send messages');
+// Create a nodemailer-compatible transporter using Resend
+const transporter = {
+  sendMail: async (mailOptions) => {
+    try {
+      const data = await resend.emails.send({
+        from: mailOptions.from || 'Dessert Lab <onboarding@resend.dev>',
+        to: mailOptions.to,
+        subject: mailOptions.subject,
+        html: mailOptions.html,
+        text: mailOptions.text
+      });
+      console.log('✅ Email sent successfully:', data);
+      return { messageId: data.id };
+    } catch (error) {
+      console.error('❌ Resend email error:', error);
+      throw error;
+    }
   }
-});
+};
+
+// Verify Resend configuration on startup
+if (process.env.RESEND_API_KEY) {
+  console.log('✅ Resend API key configured');
+} else {
+  console.warn('⚠️ RESEND_API_KEY not set - emails will not be sent');
+}
 
 // Make transporter available to routes
 app.set('transporter', transporter);
