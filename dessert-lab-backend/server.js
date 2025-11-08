@@ -5,7 +5,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
-const { Resend } = require('resend');
 require('dotenv').config();
 
 const app = express();
@@ -20,20 +19,28 @@ app.use(helmet());
 
 // Improved CORS configuration for both production and development
 const allowedOrigins = [
-  process.env.FRONTEND_URL, // Firebase production URL
+  'https://thedessertlab-48733.web.app',
+  'https://thedessertlab-48733.web.app/',
+  'https://thedessertlab-48733.firebaseapp.com',
+  'https://thedessertlab-48733.firebaseapp.com/',
   'http://localhost:3000',
   'http://localhost:8080',
-  'http://localhost:5173' // Vite default port
-].filter(Boolean); // Remove undefined values
+  'http://localhost:5173'
+].filter(Boolean);
 
 app.use(cors({
   origin: function(origin, callback) {
+    console.log('📨 Request from origin:', origin);
+    
     // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.includes(origin)) {
+      console.log('✅ Origin allowed:', origin);
       callback(null, true);
     } else {
+      console.log('❌ Origin blocked:', origin);
+      console.log('📋 Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -66,34 +73,26 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/dessert_l
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch((error) => console.error('❌ MongoDB connection error:', error));
 
-// Email setup using Resend
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-// Create a nodemailer-compatible transporter using Resend
-const transporter = {
-  sendMail: async (mailOptions) => {
-    try {
-      const data = await resend.emails.send({
-        from: mailOptions.from || 'Dessert Lab <onboarding@resend.dev>',
-        to: mailOptions.to,
-        subject: mailOptions.subject,
-        html: mailOptions.html,
-        text: mailOptions.text
-      });
-      console.log('✅ Email sent successfully:', data);
-      return { messageId: data.id };
-    } catch (error) {
-      console.error('❌ Resend email error:', error);
-      throw error;
-    }
+// Email setup using Gmail SMTP
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER || 'thedessertlab44@gmail.com',
+    pass: process.env.GMAIL_APP_PASSWORD
   }
-};
+});
 
-// Verify Resend configuration on startup
-if (process.env.RESEND_API_KEY) {
-  console.log('✅ Resend API key configured');
+// Verify Gmail configuration on startup
+if (process.env.GMAIL_APP_PASSWORD) {
+  transporter.verify(function(error, success) {
+    if (error) {
+      console.error('❌ Gmail SMTP configuration error:', error);
+    } else {
+      console.log('✅ Gmail SMTP is ready to send emails');
+    }
+  });
 } else {
-  console.warn('⚠️ RESEND_API_KEY not set - emails will not be sent');
+  console.warn('⚠️ GMAIL_APP_PASSWORD not set - emails will not be sent');
 }
 
 // Make transporter available to routes
@@ -148,6 +147,7 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log(`📧 Email service: Gmail SMTP (${process.env.GMAIL_USER || 'thedessertlab44@gmail.com'})`);
 });
 
 module.exports = app;
