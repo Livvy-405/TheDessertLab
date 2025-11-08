@@ -5,6 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 require('dotenv').config();
 
 const app = express();
@@ -19,28 +20,20 @@ app.use(helmet());
 
 // Improved CORS configuration for both production and development
 const allowedOrigins = [
-  'https://thedessertlab-48733.web.app',
-  'https://thedessertlab-48733.web.app/',
-  'https://thedessertlab-48733.firebaseapp.com',
-  'https://thedessertlab-48733.firebaseapp.com/',
+  process.env.FRONTEND_URL, // Firebase production URL
   'http://localhost:3000',
   'http://localhost:8080',
-  'http://localhost:5173'
-].filter(Boolean);
+  'http://localhost:5173' // Vite default port
+].filter(Boolean); // Remove undefined values
 
 app.use(cors({
   origin: function(origin, callback) {
-    console.log('📨 Request from origin:', origin);
-    
     // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.includes(origin)) {
-      console.log('✅ Origin allowed:', origin);
       callback(null, true);
     } else {
-      console.log('❌ Origin blocked:', origin);
-      console.log('📋 Allowed origins:', allowedOrigins);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -73,27 +66,32 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/dessert_l
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch((error) => console.error('❌ MongoDB connection error:', error));
 
-// Email setup using Gmail SMTP
+// Email transporter setup with enhanced configuration
 const transporter = nodemailer.createTransport({
   service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // Use TLS
   auth: {
-    user: process.env.GMAIL_USER || 'thedessertlab44@gmail.com',
-    pass: process.env.GMAIL_APP_PASSWORD
-  }
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  },
+  tls: {
+    rejectUnauthorized: false
+  },
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 10000
 });
 
-// Verify Gmail configuration on startup
-if (process.env.GMAIL_APP_PASSWORD) {
-  transporter.verify(function(error, success) {
-    if (error) {
-      console.error('❌ Gmail SMTP configuration error:', error);
-    } else {
-      console.log('✅ Gmail SMTP is ready to send emails');
-    }
-  });
-} else {
-  console.warn('⚠️ GMAIL_APP_PASSWORD not set - emails will not be sent');
-}
+// Verify email configuration on startup
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error('❌ Email transporter error:', error);
+  } else {
+    console.log('✅ Email server is ready to send messages');
+  }
+});
 
 // Make transporter available to routes
 app.set('transporter', transporter);
@@ -147,7 +145,6 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Allowed origins: ${allowedOrigins.join(', ')}`);
-  console.log(`📧 Email service: Gmail SMTP (${process.env.GMAIL_USER || 'thedessertlab44@gmail.com'})`);
 });
 
 module.exports = app;
