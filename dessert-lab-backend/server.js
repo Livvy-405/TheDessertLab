@@ -73,14 +73,19 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/dessert_l
 .then(() => console.log('✅ Connected to MongoDB'))
 .catch((error) => console.error('❌ MongoDB connection error:', error));
 
-// Email setup using Gmail SMTP
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER || 'thedessertlab44@gmail.com',
-    pass: process.env.GMAIL_APP_PASSWORD
-  }
-});
+// Email setup using Gmail SMTP with explicit port for Render compatibility
+   const transporter = nodemailer.createTransport({
+     host: 'smtp.gmail.com',
+     port: 587, // Use port 587 (TLS) instead of 465 (SSL) - required for Render
+     secure: false, // true for 465, false for other ports
+     auth: {
+       user: process.env.GMAIL_USER || 'thedessertlab44@gmail.com',
+       pass: process.env.GMAIL_APP_PASSWORD
+     },
+     tls: {
+       rejectUnauthorized: false // Accept self-signed certificates
+     }
+   });
 
 // Verify Gmail configuration on startup
 if (process.env.GMAIL_APP_PASSWORD) {
