@@ -20,7 +20,7 @@ app.use(helmet());
 
 // Improved CORS configuration for both production and development
 const allowedOrigins = [
-  process.env.FRONTEND_URL, // Firebase production URL
+  process.env.FRONTEND_URL , // Firebase production URL
   'http://localhost:3000',
   'http://localhost:8080',
   'http://localhost:5173' // Vite default port
