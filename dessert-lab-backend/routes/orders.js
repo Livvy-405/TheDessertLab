@@ -1,6 +1,6 @@
-// routes/orders.js - COMPLETE FIXED VERSION
+// routes/orders.js - UPDATED VERSION WITHOUT DOUGHNUTS
 const express = require('express');
-const Order = require('../models/Order');  // FIXED: Removed curly braces
+const Order = require('../models/Order');
 const { auth, adminAuth } = require('../middleware/auth');
 const PDFDocument = require('pdfkit');
 const { Readable } = require('stream');
@@ -34,26 +34,17 @@ const PRICING = {
     "Salted caramel chocolate": { 6: 150, 12: 290 },
     "Boston cream cupcake": { 6: 130, 12: 250 },
     "Matcha milkshake cupcakes": { 6: 150, 12: 290 }
-  },
-  doughnuts: {
-    "Assorted Doughnut Box": { 6: 100, 12: 190 },
-    "Cinnamon sugar": { 6: 70, 12: 130 },
-    "Double chocolate cake doughnuts": { 6: 100, 12: 190 },
-    "Red velvet cake doughnuts": { 6: 100, 12: 190 },
-    "Cream filled Italian doughnut": { 6: 80, 12: 150 },
-    "Jelly doughnuts": { 6: 80, 12: 150 },
-    "Glazed doughnuts": { 6: 70, 12: 130 }
   }
 };
 
-const TOPPINGS = [
-  { name: "Fresh berries", price: 15 },
-  { name: "Chocolate shavings", price: 10 },
-  { name: "Premium sprinkles", price: 5 },
-  { name: "Edible flowers", price: 20 },
-  { name: "Chopped nuts", price: 12 },
-  { name: "Coconut flakes", price: 8 },
-  { name: "Specialty glazes", price: 10 }
+// Updated cupcake toppings with new pricing structure
+const CUPCAKE_TOPPINGS = [
+  { name: "Fresh berries", price6: 20, price12: 40 },
+  { name: "Premium sprinkles", price6: 10, price12: 20 },
+  { name: "Edible flowers", price6: 30, price12: 60 },
+  { name: "Specialty glazes", price6: 10, price12: 20 },
+  { name: "Chocolates", price6: 20, price12: 40 },
+  { name: "Custom edible print", price6: 30, price12: 60 }
 ];
 
 // Helper function to calculate pricing
@@ -71,11 +62,15 @@ const calculateOrderPricing = (productType, quantity, toppings = [], flavor = ''
   }
   
   let toppingsPrice = 0;
-  if (toppings && toppings.length > 0) {
+  
+  // Calculate toppings price for cupcakes only
+  if (productType === 'cupcakes' && toppings && toppings.length > 0) {
     toppings.forEach(toppingName => {
-      const topping = TOPPINGS.find(t => t.name === toppingName);
+      const topping = CUPCAKE_TOPPINGS.find(t => t.name === toppingName);
       if (topping) {
-        toppingsPrice += topping.price * quantity;
+        // Use the appropriate price based on quantity (not multiplied)
+        const price = quantity === 6 ? topping.price6 : topping.price12;
+        toppingsPrice += price;
       }
     });
   }
@@ -140,6 +135,7 @@ const sendConfirmationEmail = async (transporter, orderData) => {
           <h3 style="color: #8B4513;">Order Details</h3>
           <p><strong>Order ID:</strong> #${orderData._id.toString().slice(-6)}</p>
           <p><strong>Product:</strong> ${orderData.quantity} ${orderData.productType} - ${orderData.flavor}</p>
+          ${orderData.toppings.length > 0 ? `<p><strong>Toppings:</strong> ${orderData.toppings.map(t => t.name).join(', ')}</p>` : ''}
           <p><strong>Pickup/Delivery Date:</strong> ${new Date(orderData.pickupDate).toLocaleDateString()}</p>
           <p><strong>Method:</strong> ${orderData.deliveryMethod === 'pickup' ? 'Pickup' : 'Delivery'}</p>
           <p><strong>Total Amount:</strong> K${orderData.totalPrice.toFixed(2)}</p>
@@ -237,7 +233,7 @@ const sendAdminNotification = async (transporter, orderData) => {
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
   try {
-    console.log('📥 Received order request');
+    console.log('🔥 Received order request');
 
     const {
       productType,
@@ -270,12 +266,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Pickup date must be at least 3 days from today' });
     }
 
-    // Calculate pricing - PASS FLAVOR TOO
+    // Calculate pricing
     const { basePrice, toppingsPrice, totalPrice, depositAmount } = calculateOrderPricing(
       productType, 
       parseInt(quantity), 
       toppings,
-      flavor  // Add flavor parameter
+      flavor
     );
 
     if (basePrice === 0) {
@@ -284,11 +280,17 @@ router.post('/', async (req, res) => {
 
     console.log('💰 Pricing calculated:', { basePrice, toppingsPrice, totalPrice, depositAmount });
 
-    // Process toppings with prices
-    const processedToppings = toppings.map(toppingName => {
-      const topping = TOPPINGS.find(t => t.name === toppingName);
-      return topping ? { name: topping.name, price: topping.price } : null;
-    }).filter(Boolean);
+    // Process toppings with prices (only for cupcakes)
+    const processedToppings = [];
+    if (productType === 'cupcakes' && toppings.length > 0) {
+      toppings.forEach(toppingName => {
+        const topping = CUPCAKE_TOPPINGS.find(t => t.name === toppingName);
+        if (topping) {
+          const price = parseInt(quantity) === 6 ? topping.price6 : topping.price12;
+          processedToppings.push({ name: topping.name, price });
+        }
+      });
+    }
 
     // Create order object
     const orderData = {
