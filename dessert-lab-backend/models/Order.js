@@ -65,11 +65,11 @@ const orderSchema = new mongoose.Schema({
   },
 
   // Payment Information
-  paymentMethod: {
-    type: String,
-    required: [true, 'Payment method is required'],
-    enum: ['cash', 'card', 'airtel', 'mtn']
-  },
+paymentMethod: {
+  type: String,
+  required: [true, 'Payment method is required'],
+  enum: ['mobile_money', 'bank_transfer', 'cash']  // ✅ Match frontend
+},
   depositAgreement: {
     type: Boolean,
     required: [true, 'Deposit agreement is required'],
