@@ -1,126 +1,93 @@
-// routes/contact.js
+// routes/contact.js - OPTIMIZED VERSION (NO PDF, FAST RESPONSE)
 const express = require('express');
 const Contact  = require('../models/Contact');
 const { adminAuth } = require('../middleware/auth');
-const PDFDocument = require('pdfkit');
-const { Readable } = require('stream');
 const router = express.Router();
 
-// Helper function to generate PDF for contact message
-function generateContactPDF(contactData) {
-  const doc = new PDFDocument();
-  let buffers = [];
-  doc.on('data', buffers.push.bind(buffers));
-  doc.on('end', () => {});
-
-  doc.fontSize(20).text('Contact Message - The Dessert Lab', { align: 'center' });
-  doc.moveDown();
-  doc.fontSize(12).text(`Name: ${contactData.name}`);
-  doc.text(`Email: ${contactData.email}`);
-  if (contactData.phone) doc.text(`Phone: ${contactData.phone}`);
-  doc.text(`Subject: ${contactData.subject}`);
-  doc.text(`Message:`);
-  doc.moveDown();
-  doc.text(contactData.message);
-  doc.text(`Submitted: ${new Date(contactData.createdAt).toLocaleString()}`);
-  doc.end();
-  return new Promise(resolve => {
-    doc.on('end', () => {
-      const pdfBuffer = Buffer.concat(buffers);
-      resolve(pdfBuffer);
-    });
-  });
-}
-
-// Helper function to send contact form notification
-const sendContactNotification = async (transporter, contactData) => {
-  const pdfBuffer = await generateContactPDF(contactData);
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
-    subject: `New Contact Form Submission - ${contactData.subject}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #dc3545;">New Contact Form Submission</h2>
-        <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px;">
-          <h3>Contact Details</h3>
-          <p><strong>Name:</strong> ${contactData.name}</p>
-          <p><strong>Email:</strong> ${contactData.email}</p>
-          ${contactData.phone ? `<p><strong>Phone:</strong> ${contactData.phone}</p>` : ''}
-          <p><strong>Subject:</strong> ${contactData.subject}</p>
-          <p><strong>Submitted:</strong> ${new Date(contactData.createdAt).toLocaleString()}</p>
-          <h4>Message:</h4>
-          <div style="background-color: white; padding: 15px; border-radius: 3px; border-left: 4px solid #007bff;">
-            ${contactData.message.replace(/\n/g, '<br>')}
-          </div>
-        </div>
-        <p style="color: #dc3545; font-weight: bold;">📧 Please respond to this inquiry promptly!</p>
-      </div>
-    `,
-    attachments: [
-      {
-        filename: `Contact-${contactData._id.toString().slice(-6)}.pdf`,
-        content: pdfBuffer
-      }
-    ]
-  };
+// Simplified email sending (NO PDF, non-blocking)
+const sendEmailsAsync = async (transporter, contact) => {
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Admin contact email sent:', info);
-    return info;
-  } catch (err) {
-    console.error('Error sending admin contact email:', err);
-    throw err;
+    // Admin notification email (no PDF)
+    const adminEmail = {
+      from: process.env.EMAIL_USER || 'onboarding@resend.dev',
+      to: process.env.ADMIN_EMAIL || 'thedessertlab44@gmail.com',
+      subject: `New Contact Form - ${contact.subject}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #dc3545;">New Contact Form Submission</h2>
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px;">
+            <h3>Contact Details</h3>
+            <p><strong>Name:</strong> ${contact.name}</p>
+            <p><strong>Email:</strong> ${contact.email}</p>
+            ${contact.phone ? `<p><strong>Phone:</strong> ${contact.phone}</p>` : ''}
+            <p><strong>Subject:</strong> ${contact.subject}</p>
+            <p><strong>Submitted:</strong> ${new Date(contact.createdAt).toLocaleString()}</p>
+            <h4>Message:</h4>
+            <div style="background-color: white; padding: 15px; border-radius: 3px; border-left: 4px solid #007bff;">
+              ${contact.message.replace(/\n/g, '<br>')}
+            </div>
+          </div>
+          <p style="color: #dc3545; font-weight: bold;">📧 Please respond promptly!</p>
+        </div>
+      `
+    };
+
+    // Customer auto-reply
+    const customerEmail = {
+      from: process.env.EMAIL_USER || 'onboarding@resend.dev',
+      to: contact.email,
+      subject: `Thank you for contacting The Dessert Lab - ${contact.subject}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #8B4513;">Thank You for Contacting Us!</h2>
+          
+          <p>Dear ${contact.name},</p>
+          
+          <p>Thank you for reaching out to The Dessert Lab! We've received your message and will get back to you within 24 hours.</p>
+          
+          <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="color: #8B4513;">Your Message</h3>
+            <p><strong>Subject:</strong> ${contact.subject}</p>
+            <p><strong>Message:</strong></p>
+            <div style="background-color: white; padding: 15px; border-radius: 3px; border-left: 4px solid #8B4513;">
+              ${contact.message.replace(/\n/g, '<br>')}
+            </div>
+          </div>
+          
+          <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107;">
+            <p><strong>In the meantime:</strong></p>
+            <ul>
+              <li>Check out our menu and pricing on our website</li>
+              <li>Remember that custom orders require 3 days advance notice</li>
+              <li>All orders require a 30% deposit to secure booking</li>
+            </ul>
+          </div>
+          
+          <p>If you have an urgent inquiry, please call us directly at:</p>
+          <p>📞 +260 779721358</p>
+          
+          <p>Thank you for choosing The Dessert Lab!</p>
+          
+          <hr style="margin: 30px 0;">
+          <p style="color: #666; font-size: 12px;">This is an automated response. We'll reply personally within 24 hours.</p>
+        </div>
+      `
+    };
+
+    // Send both emails in parallel
+    await Promise.all([
+      transporter.sendMail(adminEmail),
+      transporter.sendMail(customerEmail)
+    ]);
+    
+    console.log('✅ Contact emails sent successfully');
+  } catch (error) {
+    console.error('❌ Email error:', error);
+    // Don't throw - just log
   }
 };
 
-// Helper function to send auto-reply to customer
-const sendAutoReply = async (transporter, contactData) => {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: contactData.email,
-    subject: `Thank you for contacting The Dessert Lab - ${contactData.subject}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #8B4513;">Thank You for Contacting Us!</h2>
-        
-        <p>Dear ${contactData.name},</p>
-        
-        <p>Thank you for reaching out to The Dessert Lab! We've received your message and will get back to you within 24 hours.</p>
-        
-        <div style="background-color: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
-          <h3 style="color: #8B4513;">Your Message</h3>
-          <p><strong>Subject:</strong> ${contactData.subject}</p>
-          <p><strong>Message:</strong></p>
-          <div style="background-color: white; padding: 15px; border-radius: 3px; border-left: 4px solid #8B4513;">
-            ${contactData.message.replace(/\n/g, '<br>')}
-          </div>
-        </div>
-        
-        <div style="background-color: #fff3cd; padding: 15px; border-radius: 5px; border-left: 4px solid #ffc107;">
-          <p><strong>In the meantime:</strong></p>
-          <ul>
-            <li>Check out our menu and pricing on our website</li>
-            <li>Remember that custom orders require 3 days advance notice</li>
-            <li>All orders require a 30% deposit to secure booking</li>
-          </ul>
-        </div>
-        
-        <p>If you have an urgent inquiry, please call us directly at:</p>
-        <p>📞 +260 779721358</p>
-        
-        <p>Thank you for choosing The Dessert Lab!</p>
-        
-        <hr style="margin: 30px 0;">
-        <p style="color: #666; font-size: 12px;">This is an automated response. We'll reply personally within 24 hours.</p>
-      </div>
-    `
-  };
-  
-  return transporter.sendMail(mailOptions);
-};
-
-// POST /api/contact - Submit contact form
+// POST /api/contact - Submit contact form (OPTIMIZED)
 router.post('/', async (req, res) => {
   try {
     const { name, email, phone, subject, message } = req.body;
@@ -154,21 +121,19 @@ router.post('/', async (req, res) => {
     const contact = new Contact(contactData);
     await contact.save();
 
-    // Send notification emails
-    const transporter = req.app.get('transporter');
-    
-    try {
-      await sendContactNotification(transporter, contact);
-      await sendAutoReply(transporter, contact);
-    } catch (emailError) {
-      console.error('Email sending failed:', emailError);
-      // Don't fail the request if email fails
-    }
-
+    // ✅ RESPOND IMMEDIATELY
     res.status(201).json({
       message: 'Message sent successfully',
       contactId: contact._id
     });
+
+    // Send emails asynchronously (fire and forget)
+    const transporter = req.app.get('transporter');
+    if (transporter) {
+      sendEmailsAsync(transporter, contact).catch(err => {
+        console.error('Background email error:', err);
+      });
+    }
 
   } catch (error) {
     console.error('Contact form submission error:', error);
@@ -214,6 +179,7 @@ router.get('/', adminAuth, async (req, res) => {
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit)
+      .lean() // ✅ Use lean() for faster queries
       .exec();
 
     const total = await Contact.countDocuments(filter);
@@ -271,7 +237,7 @@ router.patch('/:id/status', adminAuth, async (req, res) => {
       req.params.id,
       updateData,
       { new: true }
-    );
+    ).lean();
 
     if (!contact) {
       return res.status(404).json({ error: 'Contact message not found' });
