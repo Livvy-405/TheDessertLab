@@ -1,4 +1,4 @@
-// routes/orders.js - OPTIMIZED VERSION
+// routes/orders.js - OPTIMIZED VERSION (with date-only parsing + timezone-safe formatting)
 const express = require('express');
 const Order = require('../models/Order');
 const { auth, adminAuth } = require('../middleware/auth');
@@ -76,8 +76,16 @@ const calculateOrderPricing = (productType, quantity, toppings = [], flavor = ''
 };
 
 // Simplified email sending (NO PDF, non-blocking)
+// NOTE: uses timezone-safe formatting when showing pickup dates
 const sendEmailsAsync = async (transporter, order) => {
   try {
+    const formatPickupDate = (d) => {
+      // ensure we have a Date object
+      const dateObj = d instanceof Date ? d : new Date(d);
+      // explicit timezone to avoid server timezone shifts
+      return dateObj.toLocaleDateString('en-GB', { timeZone: 'Africa/Lusaka' });
+    };
+
     // Customer confirmation email
     const customerEmail = {
       from: process.env.EMAIL_USER || 'onboarding@resend.dev',
@@ -95,8 +103,8 @@ const sendEmailsAsync = async (transporter, order) => {
             <h3 style="color: #8B4513;">Order Details</h3>
             <p><strong>Order ID:</strong> #${order._id.toString().slice(-6)}</p>
             <p><strong>Product:</strong> ${order.quantity} ${order.productType} - ${order.flavor}</p>
-            ${order.toppings.length > 0 ? `<p><strong>Toppings:</strong> ${order.toppings.map(t => t.name).join(', ')}</p>` : ''}
-            <p><strong>Pickup/Delivery Date:</strong> ${new Date(order.pickupDate).toLocaleDateString()}</p>
+            ${order.toppings && order.toppings.length > 0 ? `<p><strong>Toppings:</strong> ${order.toppings.map(t => t.name).join(', ')}</p>` : ''}
+            <p><strong>Pickup/Delivery Date:</strong> ${formatPickupDate(order.pickupDate)}</p>
             <p><strong>Method:</strong> ${order.deliveryMethod === 'pickup' ? 'Pickup' : 'Delivery'}</p>
             <p><strong>Total Amount:</strong> K${order.totalPrice.toFixed(2)}</p>
             <p><strong>Deposit Required:</strong> K${order.depositAmount.toFixed(2)} (30%)</p>
@@ -140,15 +148,15 @@ const sendEmailsAsync = async (transporter, order) => {
             <h4>Order Details:</h4>
             <p><strong>Product:</strong> ${order.quantity} ${order.productType}</p>
             <p><strong>Flavor:</strong> ${order.flavor}</p>
-            ${order.toppings.length > 0 ? `<p><strong>Toppings:</strong> ${order.toppings.map(t => t.name).join(', ')}</p>` : ''}
-            <p><strong>Date:</strong> ${new Date(order.pickupDate).toLocaleDateString()}</p>
+            ${order.toppings && order.toppings.length > 0 ? `<p><strong>Toppings:</strong> ${order.toppings.map(t => t.name).join(', ')}</p>` : ''}
+            <p><strong>Date:</strong> ${formatPickupDate(order.pickupDate)}</p>
             <p><strong>Method:</strong> ${order.deliveryMethod}</p>
             <p><strong>Payment:</strong> ${order.paymentMethod}</p>
             
-            ${order.deliveryMethod === 'delivery' ? `
+            ${order.deliveryMethod === 'delivery' && order.address ? `
             <h4>Delivery Address:</h4>
-            <p>${order.address.street}<br>
-            ${order.address.city}</p>
+            <p>${order.address.street || ''}<br>
+            ${order.address.city || ''}</p>
             ` : ''}
             
             <h4>Pricing:</h4>
@@ -179,6 +187,21 @@ const sendEmailsAsync = async (transporter, order) => {
   }
 };
 
+// Utility: parse a date-only string 'YYYY-MM-DD' into a local Date at midnight
+const parseDateOnly = (input) => {
+  if (!input) return null;
+  if (input instanceof Date) return new Date(input.getFullYear(), input.getMonth(), input.getDate());
+  // Accept strings like 'YYYY-MM-DD' (common from HTML date inputs)
+  if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const [year, month, day] = input.split('-').map(Number);
+    return new Date(year, month - 1, day); // local midnight for that date
+  }
+  // Fallback - construct Date and normalize to local date
+  const d = new Date(input);
+  if (isNaN(d.getTime())) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
+
 // POST /api/orders - Create a new order (OPTIMIZED)
 router.post('/', async (req, res) => {
   try {
@@ -206,10 +229,16 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Validate pickup date (at least 2 days from today)
-    const minDate = new Date();
-    minDate.setDate(minDate.getDate() + 2);
-    if (new Date(pickupDate) < minDate) {
+    // Parse pickup date into local date-only (midnight local)
+    const pickupDateParsed = parseDateOnly(pickupDate);
+    if (!pickupDateParsed) {
+      return res.status(400).json({ error: 'Invalid pickup date format' });
+    }
+
+    // Validate pickup date (at least 2 days from today) - compare local midnights
+    const now = new Date();
+    const minDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2); // local midnight + 2 days
+    if (pickupDateParsed < minDate) {
       return res.status(400).json({ error: 'Pickup date must be at least 2 days from today' });
     }
 
@@ -247,7 +276,7 @@ router.post('/', async (req, res) => {
       customerName,
       phoneNumber,
       email: email.toLowerCase(),
-      pickupDate: new Date(pickupDate),
+      pickupDate: pickupDateParsed, // store normalized local date
       deliveryMethod,
       specialInstructions,
       paymentMethod,
