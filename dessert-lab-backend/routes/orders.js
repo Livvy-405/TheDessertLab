@@ -7,19 +7,19 @@ const router = express.Router();
 // Product pricing configuration - IN KWACHA - EXACT PRICES BY FLAVOR
 const PRICING = {
   cookies: {
-    "Assorted Cookie Box": { 10: 180, 20: 350 },
-    "Red velvet cookies": { 10: 150, 20: 290 },
-    "Choco-cheesecake cookie bites": { 10: 150, 20: 290 },
-    "Matcha chocolate chip cookies": { 10: 150, 20: 290 },
-    "Caramelita cookies": { 10: 150, 20: 290 },
-    "Crispy butter cookies": { 10: 130, 20: 250 },
-    "Chocolate chip cookies": { 10: 150, 20: 290 },
-    "Double chocolate cookies with hazelnuts": { 10: 150, 20: 290 },
-    "Chewy oatmeal cookies": { 10: 150, 20: 290 },
-    "Peanut butter cookies": { 10: 130, 20: 250 },
-    "Brookies": { 10: 150, 20: 290 },
-    "Oatmeal chocolate chip cookies": { 10: 150, 20: 290 },
-    "Thumbprint cookies": { 10: 130, 20: 250 }
+    "Assorted Cookie Box": { 10: 100, 20: 190 },
+    "Red velvet cookies": { 10: 70, 20: 130 },
+    "Choco-cheesecake cookie bites": { 10: 70, 20: 130 },
+    "Matcha chocolate chip cookies": { 10: 70, 20: 130 },
+    "Caramelita cookies": { 10: 70, 20: 130 },
+    "Crispy butter cookies": { 10: 60, 20: 110 },
+    "Chocolate chip cookies": { 10: 70, 20: 130 },
+    "Double chocolate cookies with hazelnuts": { 10: 70, 20: 130 },
+    "Chewy oatmeal cookies": { 10: 60, 20: 110 },
+    "Peanut butter cookies": { 10: 60, 20: 110 },
+    "Brookies": { 10: 90, 20: 170 },
+    "Oatmeal chocolate chip cookies": { 10: 70, 20: 130 },
+    "Thumbprint cookies": { 10: 60, 20: 110 }
   },
   cupcakes: {
     "Assorted Cupcake Box": { 6: 180, 12: 350 },
@@ -206,11 +206,11 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Validate pickup date (at least 3 days from today)
+    // Validate pickup date (at least 2 days from today)
     const minDate = new Date();
-    minDate.setDate(minDate.getDate() + 3);
+    minDate.setDate(minDate.getDate() + 2);
     if (new Date(pickupDate) < minDate) {
-      return res.status(400).json({ error: 'Pickup date must be at least 3 days from today' });
+      return res.status(400).json({ error: 'Pickup date must be at least 2 days from today' });
     }
 
     // Calculate pricing
