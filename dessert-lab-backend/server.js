@@ -14,6 +14,59 @@ const orderRoutes = require('./routes/orders');
 const contactRoutes = require('./routes/contact');
 const authRoutes = require('./routes/auth');
 
+// server.js - Add this AFTER your routes setup
+
+// ========================================
+// RENDER.COM KEEP-ALIVE SOLUTION
+// ========================================
+
+// Self-ping to prevent cold starts (Render free tier)
+if (process.env.RENDER && process.env.NODE_ENV === 'production') {
+  const RENDER_URL = process.env.RENDER_EXTERNAL_URL || `https://your-service.onrender.com`;
+  
+  // Ping every 14 minutes (Render spins down after 15 minutes of inactivity)
+  const PING_INTERVAL = 14 * 60 * 1000; // 14 minutes in milliseconds
+  
+  setInterval(async () => {
+    try {
+      const response = await fetch(`${RENDER_URL}/api/health`);
+      if (response.ok) {
+        console.log('✅ Keep-alive ping successful at', new Date().toISOString());
+      } else {
+        console.warn('⚠️ Keep-alive ping returned status:', response.status);
+      }
+    } catch (error) {
+      console.error('❌ Keep-alive ping failed:', error.message);
+    }
+  }, PING_INTERVAL);
+  
+  console.log('🔄 Keep-alive pings enabled (every 14 minutes)');
+  console.log(`📡 Pinging: ${RENDER_URL}/api/health`);
+}
+
+// Improved health check endpoint
+app.get('/api/health', async (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  
+  // Light database check to keep connection warm
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await mongoose.connection.db.admin().ping();
+    } catch (error) {
+      console.error('Database ping failed:', error);
+    }
+  }
+  
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    database: dbStatus,
+    uptime: process.uptime()
+  });
+});
+
 // Middleware
 app.use(helmet());
 
