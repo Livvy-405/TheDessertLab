@@ -22,7 +22,7 @@ const authRoutes = require('./routes/auth');
 
 // Self-ping to prevent cold starts (Render free tier)
 if (process.env.RENDER && process.env.NODE_ENV === 'production') {
-  const RENDER_URL = process.env.RENDER_EXTERNAL_URL || `https://your-service.onrender.com`;
+  const RENDER_URL = process.env.RENDER_EXTERNAL_URL || `https://thedessertlab.onrender.com`;
   
   // Ping every 14 minutes (Render spins down after 15 minutes of inactivity)
   const PING_INTERVAL = 14 * 60 * 1000; // 14 minutes in milliseconds
