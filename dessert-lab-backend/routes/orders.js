@@ -1,4 +1,4 @@
-// routes/orders.js - OPTIMIZED VERSION (with date-only parsing + timezone-safe formatting)
+// routes/orders.js - UPDATED WITH MUFFINS SUPPORT
 const express = require('express');
 const Order = require('../models/Order');
 const { auth, adminAuth } = require('../middleware/auth');
@@ -32,6 +32,15 @@ const PRICING = {
     "Salted caramel chocolate": { 6: 150, 12: 290 },
     "Boston cream cupcake": { 6: 130, 12: 250 },
     "Matcha milkshake cupcakes": { 6: 150, 12: 290 }
+  },
+  muffins: {
+    "Assorted Muffin Box": { 6: 180, 12: 350 },
+    "Dark Chocolate Muffins": { 6: 150, 12: 290 },
+    "Banana S'more Muffins": { 6: 150, 12: 290 },
+    "Nutella Banana Muffins": { 6: 150, 12: 290 },
+    "Blueberry Muffins": { 6: 150, 12: 290 },
+    "Cappuccino Muffins": { 6: 150, 12: 290 },
+    "Lemon Poppy Muffins": { 6: 140, 12: 270 }
   }
 };
 
@@ -59,6 +68,7 @@ const calculateOrderPricing = (productType, quantity, toppings = [], flavor = ''
   
   let toppingsPrice = 0;
   
+  // Toppings only apply to cupcakes
   if (productType === 'cupcakes' && toppings && toppings.length > 0) {
     toppings.forEach(toppingName => {
       const topping = CUPCAKE_TOPPINGS.find(t => t.name === toppingName);
@@ -76,13 +86,10 @@ const calculateOrderPricing = (productType, quantity, toppings = [], flavor = ''
 };
 
 // Simplified email sending (NO PDF, non-blocking)
-// NOTE: uses timezone-safe formatting when showing pickup dates
 const sendEmailsAsync = async (transporter, order) => {
   try {
     const formatPickupDate = (d) => {
-      // ensure we have a Date object
       const dateObj = d instanceof Date ? d : new Date(d);
-      // explicit timezone to avoid server timezone shifts
       return dateObj.toLocaleDateString('en-GB', { timeZone: 'Africa/Lusaka' });
     };
 
@@ -174,7 +181,6 @@ const sendEmailsAsync = async (transporter, order) => {
       `
     };
 
-    // Send emails in parallel (don't wait for them)
     await Promise.all([
       transporter.sendMail(customerEmail),
       transporter.sendMail(adminEmail)
@@ -183,7 +189,6 @@ const sendEmailsAsync = async (transporter, order) => {
     console.log('✅ Emails sent successfully');
   } catch (error) {
     console.error('❌ Email error:', error);
-    // Don't throw - just log the error
   }
 };
 
@@ -191,12 +196,10 @@ const sendEmailsAsync = async (transporter, order) => {
 const parseDateOnly = (input) => {
   if (!input) return null;
   if (input instanceof Date) return new Date(input.getFullYear(), input.getMonth(), input.getDate());
-  // Accept strings like 'YYYY-MM-DD' (common from HTML date inputs)
   if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
     const [year, month, day] = input.split('-').map(Number);
-    return new Date(year, month - 1, day); // local midnight for that date
+    return new Date(year, month - 1, day);
   }
-  // Fallback - construct Date and normalize to local date
   const d = new Date(input);
   if (isNaN(d.getTime())) return null;
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -229,15 +232,15 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    // Parse pickup date into local date-only (midnight local)
+    // Parse pickup date
     const pickupDateParsed = parseDateOnly(pickupDate);
     if (!pickupDateParsed) {
       return res.status(400).json({ error: 'Invalid pickup date format' });
     }
 
-    // Validate pickup date (at least 2 days from today) - compare local midnights
+    // Validate pickup date (at least 2 days from today)
     const now = new Date();
-    const minDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2); // local midnight + 2 days
+    const minDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2);
     if (pickupDateParsed < minDate) {
       return res.status(400).json({ error: 'Pickup date must be at least 2 days from today' });
     }
@@ -276,7 +279,7 @@ router.post('/', async (req, res) => {
       customerName,
       phoneNumber,
       email: email.toLowerCase(),
-      pickupDate: pickupDateParsed, // store normalized local date
+      pickupDate: pickupDateParsed,
       deliveryMethod,
       specialInstructions,
       paymentMethod,
@@ -300,14 +303,14 @@ router.post('/', async (req, res) => {
     const order = new Order(orderData);
     await order.save();
 
-    // ✅ RESPOND IMMEDIATELY - Don't wait for emails
+    // ✅ RESPOND IMMEDIATELY
     res.status(201).json({
       message: 'Order submitted successfully',
       orderId: order._id,
       orderNumber: order._id.toString().slice(-6)
     });
 
-    // Send emails asynchronously (fire and forget)
+    // Send emails asynchronously
     const transporter = req.app.get('transporter');
     if (transporter) {
       sendEmailsAsync(transporter, order).catch(err => {
@@ -358,7 +361,7 @@ router.get('/', adminAuth, async (req, res) => {
       .sort(sort)
       .limit(limit * 1)
       .skip((page - 1) * limit)
-      .lean() // ✅ Use lean() for faster queries
+      .lean()
       .exec();
 
     const total = await Order.countDocuments(filter);
