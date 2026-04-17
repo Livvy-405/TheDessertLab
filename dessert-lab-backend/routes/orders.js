@@ -46,12 +46,12 @@ const PRICING = {
 
 // Updated cupcake toppings with new pricing structure
 const CUPCAKE_TOPPINGS = [
-  { name: "Fresh berries", price6: 20, price12: 40 },
+  { name: "Fresh berries", price6: 40, price12: 70 },
   { name: "Premium sprinkles", price6: 10, price12: 20 },
-  { name: "Edible flowers", price6: 30, price12: 60 },
+  { name: "Edible flowers", price6: 50, price12: 90 },
   { name: "Specialty glazes", price6: 10, price12: 20 },
   { name: "Chocolates", price6: 20, price12: 40 },
-  { name: "Custom edible print", price6: 30, price12: 60 }
+  { name: "Custom print message", price6: 50, price12: 90 }
 ];
 
 // Helper function to calculate pricing
